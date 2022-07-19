@@ -1,2 +1,2 @@
-# Scheduled Firebase function for Paper Trader
-Node.js week-nightly scheduled Firebase function for updating portfolio values history for each user in Paper Trader
+# Scheduled function for Paper Trader
+Scheduled Firebase cloud function using Node.js for updating portfolio values histories after each day
