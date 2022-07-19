@@ -3,13 +3,12 @@ const admin = require("firebase-admin");
 const fetch = require("node-fetch");
 admin.initializeApp();
 
-exports.scheduled = functions.pubsub.schedule('0 0 * * 2-6').timeZone('America/New_York').onRun(async (context) => {
+exports.scheduled = functions.pubsub.schedule('0 17 * * 1-5').timeZone('America/New_York').onRun(async (context) => {
     const users = admin.firestore().collection('users');
     return users.get().then(snapshot => snapshot.forEach(async doc => {
         const docData = doc.data();
         const dates = docData.dates;
         const date = new Date();
-        date.setDate(date.getDate() - 1);
         dates.push(date.toLocaleDateString('en-US', {timeZone: 'America/New_York'}));
         const portfolioValues = docData.portfolioValues;
         const cash = Number(docData.cash);
@@ -37,7 +36,6 @@ exports.scheduled = functions.pubsub.schedule('0 0 * * 2-6').timeZone('America/N
 //         const docData = doc.data();
 //         const dates = docData.dates;
 //         const date = new Date();
-//         date.setDate(date.getDate() - 1);
 //         dates.push(date.toLocaleDateString('en-US', {timeZone: 'America/New_York'}));
 //         const portfolioValues = docData.portfolioValues;
 //         const cash = Number(docData.cash);
