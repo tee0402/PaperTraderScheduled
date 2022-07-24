@@ -10,7 +10,7 @@ exports.scheduled = functions.pubsub.schedule('0 17 * * 1-5').timeZone('America/
     const today = new Date().toLocaleDateString("en-US", {timeZone: "America/New_York"});
     if (holidays[0] === today) {
         holidays.shift();
-        return holidaysDocRef.update("dates", holidays).then(() => response.send({result: "success"})).catch(error => response.send(error));
+        return holidaysDocRef.update("dates", holidays).then(() => "success").catch(error => error);
     } else {
         const users = admin.firestore().collection("users");
         return users.get().then(snapshot => snapshot.forEach(async doc => {
