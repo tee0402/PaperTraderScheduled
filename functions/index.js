@@ -23,16 +23,14 @@ exports.scheduledUpdatePortfolios = functions.pubsub.schedule('0 17 * * 1-5').ti
             const positions = docData.positions;
             const positionsShares = positions.map(position => docData.positionsShares[position]);
 
-            await users.doc(doc.id).collection("history").where("paid", "==", false).orderBy("date").get().then(async pendingDividendDocs => {
-                for (const pendingDividendDoc of pendingDividendDocs.docs) {
+            await users.doc(doc.id).collection("history").where("paid", "==", false)
+            .where("date", ">", moment.tz(today + " 16:00", "America/New_York").toDate())
+            .where("date", "<", moment.tz(today + " 18:00", "America/New_York").toDate()).get().then(async pendingDividendDocs => {
+                await Promise.all(pendingDividendDocs.docs.map(pendingDividendDoc => {
                     const pendingDividendData = pendingDividendDoc.data();
-                    if (today === moment.tz(pendingDividendData.date.toDate(), "America/New_York").format("YYYY-MM-DD")) {
-                        cash += Number(pendingDividendData.shares) * Number(pendingDividendData.dividend);
-                        await users.doc(doc.id).collection("history").doc(pendingDividendDoc.id).update("paid", true);
-                    } else {
-                        break;
-                    }
-                }
+                    cash += Number(pendingDividendData.shares) * Number(pendingDividendData.dividend);
+                    return users.doc(doc.id).collection("history").doc(pendingDividendDoc.id).update("paid", true);
+                }));
                 return users.doc(doc.id).update("cash", cash.toFixed(2));
             });
 
@@ -71,16 +69,14 @@ exports.scheduledUpdatePortfolios = functions.pubsub.schedule('0 17 * * 1-5').ti
 //             const positions = docData.positions;
 //             const positionsShares = positions.map(position => docData.positionsShares[position]);
 
-//             await users.doc(doc.id).collection("history").where("paid", "==", false).orderBy("date").get().then(async pendingDividendDocs => {
-//                 for (const pendingDividendDoc of pendingDividendDocs.docs) {
+//             await users.doc(doc.id).collection("history").where("paid", "==", false)
+//             .where("date", ">", moment.tz(today + " 16:00", "America/New_York").toDate())
+//             .where("date", "<", moment.tz(today + " 18:00", "America/New_York").toDate()).get().then(async pendingDividendDocs => {
+//                 await Promise.all(pendingDividendDocs.docs.map(pendingDividendDoc => {
 //                     const pendingDividendData = pendingDividendDoc.data();
-//                     if (today === moment.tz(pendingDividendData.date.toDate(), "America/New_York").format("YYYY-MM-DD")) {
-//                         cash += Number(pendingDividendData.shares) * Number(pendingDividendData.dividend);
-//                         await users.doc(doc.id).collection("history").doc(pendingDividendDoc.id).update("paid", true);
-//                     } else {
-//                         break;
-//                     }
-//                 }
+//                     cash += Number(pendingDividendData.shares) * Number(pendingDividendData.dividend);
+//                     return users.doc(doc.id).collection("history").doc(pendingDividendDoc.id).update("paid", true);
+//                 }));
 //                 return users.doc(doc.id).update("cash", cash.toFixed(2));
 //             });
 
