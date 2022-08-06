@@ -1,10 +1,10 @@
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
-const fetch = require("node-fetch");
-const moment = require("moment-timezone");
+import { pubsub, https } from "firebase-functions";
+import admin from "firebase-admin";
+import fetch from "node-fetch";
+import moment from "moment-timezone";
 admin.initializeApp();
 
-exports.scheduledUpdatePortfolios = functions.pubsub.schedule('0 17 * * 1-5').timeZone('America/New_York').onRun(async (context) => {
+export const scheduledUpdatePortfolios = pubsub.schedule('0 17 * * 1-5').timeZone('America/New_York').onRun(async (context) => {
     const holidaysDocRef = admin.firestore().collection("holidays").doc("holidays");
     const holidaysDoc = await holidaysDocRef.get();
     const holidays = holidaysDoc.data().dates;
@@ -50,7 +50,7 @@ exports.scheduledUpdatePortfolios = functions.pubsub.schedule('0 17 * * 1-5').ti
     }
 });
 
-// exports.updatePortfolios = functions.https.onRequest(async (request, response) => {
+// export const updatePortfolios = https.onRequest(async (request, response) => {
 //     const holidaysDocRef = admin.firestore().collection("holidays").doc("holidays");
 //     const holidaysDoc = await holidaysDocRef.get();
 //     const holidays = holidaysDoc.data().dates;
@@ -96,7 +96,7 @@ exports.scheduledUpdatePortfolios = functions.pubsub.schedule('0 17 * * 1-5').ti
 //     }
 // });
 
-exports.scheduledAddPendingDividends = functions.pubsub.schedule('30 9 * * 1-5').timeZone('America/New_York').onRun(async (context) => {
+export const scheduledAddPendingDividends = pubsub.schedule('30 9 * * 1-5').timeZone('America/New_York').onRun(async (context) => {
     const holidaysDocRef = admin.firestore().collection("holidays").doc("holidays");
     const holidaysDoc = await holidaysDocRef.get();
     const holidays = holidaysDoc.data().dates;
@@ -131,7 +131,7 @@ exports.scheduledAddPendingDividends = functions.pubsub.schedule('30 9 * * 1-5')
     }
 });
 
-// exports.addPendingDividends = functions.https.onRequest(async (request, response) => {
+// export const addPendingDividends = https.onRequest(async (request, response) => {
 //     const holidaysDocRef = admin.firestore().collection("holidays").doc("holidays");
 //     const holidaysDoc = await holidaysDocRef.get();
 //     const holidays = holidaysDoc.data().dates;
