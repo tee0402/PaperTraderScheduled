@@ -13,17 +13,17 @@ export const scheduledUpdatePortfolios = pubsub.schedule("0 17 * * 1-5").timeZon
         holidays.shift();
         return holidaysDocRef.update("dates", holidays).then(() => "success").catch(error => error);
     } else {
+        const fetches = {};
         const users = admin.firestore().collection("users");
-        return users.get().then(snapshot => snapshot.forEach(async doc => {
+        await users.get().then(snapshot => snapshot.forEach(async doc => {
             const docData = doc.data();
-            const dates = docData.dates;
-            dates.push(today);
-            const portfolioValues = docData.portfolioValues;
             let cash = Number(docData.cash);
             const positions = docData.positions;
-            const positionsShares = positions.map(position => docData.positionsShares[position]);
+            for (const position of positions) {
+                fetches[position] = fetch("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=" + position + "&apikey=1275");
+            }
 
-            await users.doc(doc.id).collection("history").where("paid", "==", false)
+            return users.doc(doc.id).collection("history").where("paid", "==", false)
             .where("date", ">", moment.tz(today + " 16:00", "America/New_York").toDate())
             .where("date", "<", moment.tz(today + " 18:00", "America/New_York").toDate()).get().then(async pendingDividendDocs => {
                 await Promise.all(pendingDividendDocs.docs.map(pendingDividendDoc => {
@@ -33,19 +33,36 @@ export const scheduledUpdatePortfolios = pubsub.schedule("0 17 * * 1-5").timeZon
                 }));
                 return users.doc(doc.id).update("cash", cash.toFixed(2));
             });
+        }));
 
-            const fetchPromises = positions.map(position => fetch("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=" + position + "&apikey=1275"));
-            return Promise.all(fetchPromises).then(async fetchResponses => {
-                const jsonPromises = fetchResponses.map(fetchResponse => fetchResponse.json());
-                return Promise.all(jsonPromises).then(jsons => {
-                    const quotes = jsons.map(json => Number(json["Global Quote"]["05. price"]));
-                    const portfolioValue = quotes.reduce((previousValue, currentValue, currentIndex) => previousValue + currentValue * Number(positionsShares[currentIndex]), cash).toFixed(2);
-                    portfolioValues.push(portfolioValue);
-                    const a = users.doc(doc.id).update("dates", dates);
-                    const b = users.doc(doc.id).update("portfolioValues", portfolioValues);
-                    return Promise.all([a, b]);
+        const fetchTickers = [];
+        const fetchPromises = [];
+        for (const ticker in fetches) {
+            fetchTickers.push(ticker);
+            fetchPromises.push(fetches[ticker]);
+        }
+        await Promise.all(fetchPromises).then(async fetchResponses => {
+            return Promise.all(fetchResponses.map(fetchResponse => fetchResponse.json())).then(jsons => {
+                return jsons.map((json, index) => {
+                    fetches[fetchTickers[index]] = Number(json["Global Quote"]["05. price"]);
                 });
             });
+        });
+
+        return users.get().then(snapshot => snapshot.forEach(doc => {
+            const docData = doc.data();
+            const dates = docData.dates;
+            dates.push(today);
+            const portfolioValues = docData.portfolioValues;
+            const cash = Number(docData.cash);
+            const positions = docData.positions;
+            const positionsShares = positions.map(position => docData.positionsShares[position]);
+            const quotes = positions.map(position => fetches[position]);
+            const portfolioValue = quotes.reduce((previousValue, currentValue, currentIndex) => previousValue + currentValue * Number(positionsShares[currentIndex]), cash).toFixed(2);
+            portfolioValues.push(portfolioValue);
+            const a = users.doc(doc.id).update("dates", dates);
+            const b = users.doc(doc.id).update("portfolioValues", portfolioValues);
+            return Promise.all([a, b]);
         })).then(() => "success").catch(error => error);
     }
 });
@@ -59,17 +76,17 @@ export const scheduledUpdatePortfolios = pubsub.schedule("0 17 * * 1-5").timeZon
 //         holidays.shift();
 //         return holidaysDocRef.update("dates", holidays).then(() => response.send({result: "success"})).catch(error => response.send(error));
 //     } else {
+//         const fetches = {};
 //         const users = admin.firestore().collection("users");
-//         return users.get().then(snapshot => snapshot.forEach(async doc => {
+//         await users.get().then(snapshot => snapshot.forEach(async doc => {
 //             const docData = doc.data();
-//             const dates = docData.dates;
-//             dates.push(today);
-//             const portfolioValues = docData.portfolioValues;
 //             let cash = Number(docData.cash);
 //             const positions = docData.positions;
-//             const positionsShares = positions.map(position => docData.positionsShares[position]);
+//             for (const position of positions) {
+//                 fetches[position] = fetch("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=" + position + "&apikey=1275");
+//             }
 
-//             await users.doc(doc.id).collection("history").where("paid", "==", false)
+//             return users.doc(doc.id).collection("history").where("paid", "==", false)
 //             .where("date", ">", moment.tz(today + " 16:00", "America/New_York").toDate())
 //             .where("date", "<", moment.tz(today + " 18:00", "America/New_York").toDate()).get().then(async pendingDividendDocs => {
 //                 await Promise.all(pendingDividendDocs.docs.map(pendingDividendDoc => {
@@ -79,19 +96,36 @@ export const scheduledUpdatePortfolios = pubsub.schedule("0 17 * * 1-5").timeZon
 //                 }));
 //                 return users.doc(doc.id).update("cash", cash.toFixed(2));
 //             });
+//         }));
 
-//             const fetchPromises = positions.map(position => fetch("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=" + position + "&apikey=1275"));
-//             return Promise.all(fetchPromises).then(async fetchResponses => {
-//                 const jsonPromises = fetchResponses.map(fetchResponse => fetchResponse.json());
-//                 return Promise.all(jsonPromises).then(jsons => {
-//                     const quotes = jsons.map(json => Number(json["Global Quote"]["05. price"]));
-//                     const portfolioValue = quotes.reduce((previousValue, currentValue, currentIndex) => previousValue + currentValue * Number(positionsShares[currentIndex]), cash).toFixed(2);
-//                     portfolioValues.push(portfolioValue);
-//                     const a = users.doc(doc.id).update("dates", dates);
-//                     const b = users.doc(doc.id).update("portfolioValues", portfolioValues);
-//                     return Promise.all([a, b]);
+//         const fetchTickers = [];
+//         const fetchPromises = [];
+//         for (const ticker in fetches) {
+//             fetchTickers.push(ticker);
+//             fetchPromises.push(fetches[ticker]);
+//         }
+//         await Promise.all(fetchPromises).then(async fetchResponses => {
+//             return Promise.all(fetchResponses.map(fetchResponse => fetchResponse.json())).then(jsons => {
+//                 return jsons.map((json, index) => {
+//                     fetches[fetchTickers[index]] = Number(json["Global Quote"]["05. price"]);
 //                 });
 //             });
+//         });
+
+//         return users.get().then(snapshot => snapshot.forEach(doc => {
+//             const docData = doc.data();
+//             const dates = docData.dates;
+//             dates.push(today);
+//             const portfolioValues = docData.portfolioValues;
+//             const cash = Number(docData.cash);
+//             const positions = docData.positions;
+//             const positionsShares = positions.map(position => docData.positionsShares[position]);
+//             const quotes = positions.map(position => fetches[position]);
+//             const portfolioValue = quotes.reduce((previousValue, currentValue, currentIndex) => previousValue + currentValue * Number(positionsShares[currentIndex]), cash).toFixed(2);
+//             portfolioValues.push(portfolioValue);
+//             const a = users.doc(doc.id).update("dates", dates);
+//             const b = users.doc(doc.id).update("portfolioValues", portfolioValues);
+//             return Promise.all([a, b]);
 //         })).then(() => response.send({result: "success"})).catch(error => response.send(error));
 //     }
 // });
@@ -102,31 +136,49 @@ export const scheduledAddPendingDividends = pubsub.schedule("30 9 * * 1-5").time
     const holidays = holidaysDoc.data().dates;
     const today = moment().tz("America/New_York").format("YYYY-MM-DD");
     if (holidays[0] !== today) {
+        const fetches = {};
         const users = admin.firestore().collection("users");
+        await users.get().then(snapshot => snapshot.forEach(doc => {
+            const docData = doc.data();
+            const positions = docData.positions;
+            for (const position of positions) {
+                fetches[position] = fetch("https://api.polygon.io/v3/reference/dividends?ticker=" + position + "&ex_dividend_date=" + today + "&apiKey=lTkAIOnwJ9vpjDvqYAF0RWt9yMkhD0up");
+            }
+            return true;
+        }));
+
+        const fetchTickers = [];
+        const fetchPromises = [];
+        for (const ticker in fetches) {
+            fetchTickers.push(ticker);
+            fetchPromises.push(fetches[ticker]);
+        }
+        await Promise.all(fetchPromises).then(async fetchResponses => {
+            return Promise.all(fetchResponses.map(fetchResponse => fetchResponse.json())).then(jsons => {
+                return jsons.map((json, index) => {
+                    fetches[fetchTickers[index]] = json["results"].length === 1 ? json["results"][0] : null;
+                });
+            });
+        });
+
         return users.get().then(snapshot => snapshot.forEach(async doc => {
             const docData = doc.data();
             const positions = docData.positions;
-            const positionsShares = positions.map(position => docData.positionsShares[position]);
-
-            const fetchPromises = positions.map(position => fetch("https://api.polygon.io/v3/reference/dividends?ticker=" + position + "&ex_dividend_date=" + today + "&apiKey=lTkAIOnwJ9vpjDvqYAF0RWt9yMkhD0up"));
-            return Promise.all(fetchPromises).then(async fetchResponses => {
-                const jsonPromises = fetchResponses.map(fetchResponse => fetchResponse.json());
-                return Promise.all(jsonPromises).then(async jsons => {
-                    for (let i = 0; i < jsons.length; i++) {
-                        const resultsArray = jsons[i]["results"];
-                        if (resultsArray.length === 1) {
-                            const resultObject = resultsArray[0];
-                            await users.doc(doc.id).collection("history").add({
-                                date: moment.tz(resultObject.pay_date + " 17:00", "America/New_York").toDate(),
-                                dividend: String(resultObject.cash_amount),
-                                paid: false,
-                                shares: positionsShares[i],
-                                ticker: positions[i]
-                            });
-                        }
-                    }
-                });
+            const positionsShares = docData.positionsShares;
+            const addPromises = [];
+            positions.map(position => {
+                const resultObject = fetches[position];
+                if (resultObject !== null) {
+                    addPromises.push(users.doc(doc.id).collection("history").add({
+                        date: moment.tz(resultObject.pay_date + " 17:00", "America/New_York").toDate(),
+                        dividend: String(resultObject.cash_amount),
+                        paid: false,
+                        shares: positionsShares[position],
+                        ticker: position
+                    }));
+                }
             });
+            return Promise.all(addPromises);
         })).then(() => "success").catch(error => error);
     }
 });
@@ -137,31 +189,49 @@ export const scheduledAddPendingDividends = pubsub.schedule("30 9 * * 1-5").time
 //     const holidays = holidaysDoc.data().dates;
 //     const today = moment().tz("America/New_York").format("YYYY-MM-DD");
 //     if (holidays[0] !== today) {
+//         const fetches = {};
 //         const users = admin.firestore().collection("users");
+//         await users.get().then(snapshot => snapshot.forEach(doc => {
+//             const docData = doc.data();
+//             const positions = docData.positions;
+//             for (const position of positions) {
+//                 fetches[position] = fetch("https://api.polygon.io/v3/reference/dividends?ticker=" + position + "&ex_dividend_date=" + today + "&apiKey=lTkAIOnwJ9vpjDvqYAF0RWt9yMkhD0up");
+//             }
+//             return true;
+//         }));
+
+//         const fetchTickers = [];
+//         const fetchPromises = [];
+//         for (const ticker in fetches) {
+//             fetchTickers.push(ticker);
+//             fetchPromises.push(fetches[ticker]);
+//         }
+//         await Promise.all(fetchPromises).then(async fetchResponses => {
+//             return Promise.all(fetchResponses.map(fetchResponse => fetchResponse.json())).then(jsons => {
+//                 return jsons.map((json, index) => {
+//                     fetches[fetchTickers[index]] = json["results"].length === 1 ? json["results"][0] : null;
+//                 });
+//             });
+//         });
+
 //         return users.get().then(snapshot => snapshot.forEach(async doc => {
 //             const docData = doc.data();
 //             const positions = docData.positions;
-//             const positionsShares = positions.map(position => docData.positionsShares[position]);
-
-//             const fetchPromises = positions.map(position => fetch("https://api.polygon.io/v3/reference/dividends?ticker=" + position + "&ex_dividend_date=" + today + "&apiKey=lTkAIOnwJ9vpjDvqYAF0RWt9yMkhD0up"));
-//             return Promise.all(fetchPromises).then(async fetchResponses => {
-//                 const jsonPromises = fetchResponses.map(fetchResponse => fetchResponse.json());
-//                 return Promise.all(jsonPromises).then(async jsons => {
-//                     for (let i = 0; i < jsons.length; i++) {
-//                         const resultsArray = jsons[i]["results"];
-//                         if (resultsArray.length === 1) {
-//                             const resultObject = resultsArray[0];
-//                             await users.doc(doc.id).collection("history").add({
-//                                 date: moment.tz(resultObject.pay_date + " 17:00", "America/New_York").toDate(),
-//                                 dividend: String(resultObject.cash_amount),
-//                                 paid: false,
-//                                 shares: positionsShares[i],
-//                                 ticker: positions[i]
-//                             });
-//                         }
-//                     }
-//                 });
+//             const positionsShares = docData.positionsShares;
+//             const addPromises = [];
+//             positions.map(position => {
+//                 const resultObject = fetches[position];
+//                 if (resultObject !== null) {
+//                     addPromises.push(users.doc(doc.id).collection("history").add({
+//                         date: moment.tz(resultObject.pay_date + " 17:00", "America/New_York").toDate(),
+//                         dividend: String(resultObject.cash_amount),
+//                         paid: false,
+//                         shares: positionsShares[position],
+//                         ticker: position
+//                     }));
+//                 }
 //             });
+//             return Promise.all(addPromises);
 //         })).then(() => response.send({result: "success"})).catch(error => response.send(error));
 //     }
 // });
