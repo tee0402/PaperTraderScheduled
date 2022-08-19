@@ -130,7 +130,7 @@ export const scheduledUpdatePortfolios = pubsub.schedule("0 17 * * 1-5").timeZon
 //     }
 // });
 
-export const scheduledAddPendingDividends = pubsub.schedule("30 9 * * 1-5").timeZone("America/New_York").onRun(async context => {
+export const scheduledAddPendingDividends = pubsub.schedule("29 9 * * 1-5").timeZone("America/New_York").onRun(async context => {
     const holidaysDocRef = admin.firestore().collection("holidays").doc("holidays");
     const holidaysDoc = await holidaysDocRef.get();
     const holidays = holidaysDoc.data().dates;
